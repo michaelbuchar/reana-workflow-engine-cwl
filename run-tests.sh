@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2023, 2024 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2023, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -9,11 +9,35 @@
 set -o errexit
 set -o nounset
 
-check_commitlint() {
+docker_build() {
+    docker build -t docker.io/reanahub/reana-workflow-engine-cwl .
+}
+
+docs_sphinx() {
+    sphinx-build -qnNW docs docs/_build/html
+}
+
+format_black() {
+    black --check .
+}
+
+format_prettier() {
+    prettier -c .
+}
+
+format_shfmt() {
+    shfmt -d .
+}
+
+lint_commitlint() {
     from=${2:-master}
     to=${3:-HEAD}
     pr=${4:-[0-9]+}
-    npx commitlint --from="$from" --to="$to"
+    if command -v commitlint >/dev/null 2>&1; then
+        commitlint --from="$from" --to="$to"
+    else
+        npx commitlint --from="$from" --to="$to"
+    fi
     found=0
     while IFS= read -r line; do
         commit_hash=$(echo "$line" | cut -d ' ' -f 1)
@@ -43,102 +67,105 @@ check_commitlint() {
     fi
 }
 
-check_shellcheck() {
-    find . -name "*.sh" -exec shellcheck {} \+
-}
-
-check_pydocstyle() {
-    pydocstyle reana_workflow_engine_cwl
-}
-
-check_black() {
-    black --check .
-}
-
-check_flake8() {
+lint_flake8() {
     flake8 .
 }
 
-check_manifest() {
-    check-manifest
-}
-
-check_sphinx() {
-    sphinx-build -qnNW docs docs/_build/html
-}
-
-check_pytest() {
-    pytest
-}
-
-check_dockerfile() {
+lint_hadolint() {
     docker run -i --rm docker.io/hadolint/hadolint:v2.12.0 <Dockerfile
 }
 
-check_docker_build() {
-    docker build -t docker.io/reanahub/reana-workflow-engine-cwl .
-}
-
-check_jsonlint() {
+lint_jsonlint() {
     find . -name "*.json" -exec jsonlint -q {} \+
 }
 
-check_yamllint() {
-    yamllint .
+lint_manifest() {
+    check-manifest
 }
 
-check_shfmt() {
-    shfmt -d .
-}
-
-check_markdownlint() {
+lint_markdownlint() {
     markdownlint-cli2 "**/*.md"
 }
 
-check_prettier() {
-    prettier -c .
+lint_pydocstyle() {
+    pydocstyle reana_workflow_engine_cwl
 }
 
-check_all() {
-    check_commitlint
-    check_shellcheck
-    check_pydocstyle
-    check_black
-    check_flake8
-    check_manifest
-    check_sphinx
-    check_pytest
-    check_dockerfile
-    check_docker_build
-    check_jsonlint
-    check_yamllint
-    check_shfmt
-    check_markdownlint
-    check_prettier
+lint_shellcheck() {
+    find . -name "*.sh" -exec shellcheck {} \+
+}
+
+lint_yamllint() {
+    yamllint .
+}
+
+python_tests() {
+    pytest
+}
+
+all() {
+    docker_build
+    docs_sphinx
+    format_black
+    format_prettier
+    format_shfmt
+    lint_commitlint
+    lint_flake8
+    lint_hadolint
+    lint_jsonlint
+    lint_manifest
+    lint_markdownlint
+    lint_pydocstyle
+    lint_shellcheck
+    lint_yamllint
+    python_tests
+}
+
+help() {
+    echo "Usage: $0 [options]"
+    echo "Options:"
+    echo "  --all                  Perform all checks [default]"
+    echo "  --docker-build         Check Docker build"
+    echo "  --docs-sphinx          Check Sphinx docs build"
+    echo "  --format-black         Check formatting of Python code"
+    echo "  --format-prettier      Check formatting of Markdown etc files"
+    echo "  --format-shfmt         Check formatting of shell scripts"
+    echo "  --help                 Display this help message"
+    echo "  --lint-commitlint      Check linting of commit messages"
+    echo "  --lint-flake8          Check linting of Python code"
+    echo "  --lint-hadolint        Check linting of Dockerfiles"
+    echo "  --lint-jsonlint        Check linting of JSON files"
+    echo "  --lint-manifest        Check linting of Python manifest"
+    echo "  --lint-markdownlint    Check linting of Markdown files"
+    echo "  --lint-pydocstyle      Check linting of Python docstrings"
+    echo "  --lint-shellcheck      Check linting of shell scripts"
+    echo "  --lint-yamllint        Check linting of YAML files"
+    echo "  --python-tests         Check Python test suite"
 }
 
 if [ $# -eq 0 ]; then
-    check_all
+    all
     exit 0
 fi
 
 arg="$1"
 case $arg in
---check-commitlint) check_commitlint "$@" ;;
---check-shellcheck) check_shellcheck ;;
---check-pydocstyle) check_pydocstyle ;;
---check-black) check_black ;;
---check-flake8) check_flake8 ;;
---check-manifest) check_manifest ;;
---check-sphinx) check_sphinx ;;
---check-pytest) check_pytest ;;
---check-dockerfile) check_dockerfile ;;
---check-docker-build) check_docker_build ;;
---check-jsonlint) check_jsonlint ;;
---check-yamllint) check_yamllint ;;
---check-shfmt) check_shfmt ;;
---check-markdownlint) check_markdownlint ;;
---check-prettier) check_prettier ;;
---check-all) check_all ;;
-*) echo "[ERROR] Invalid argument '$arg'. Exiting." && exit 1 ;;
+--all) all ;;
+--help) help ;;
+--docker-build) docker_build ;;
+--docs-sphinx) docs_sphinx ;;
+--format-black) format_black ;;
+--format-prettier) format_prettier ;;
+--format-shfmt) format_shfmt ;;
+--lint-commitlint) lint_commitlint "$@" ;;
+--lint-flake8) lint_flake8 ;;
+--lint-hadolint) lint_hadolint ;;
+--lint-jsonlint) lint_jsonlint ;;
+--lint-manifest) lint_manifest ;;
+--lint-markdownlint) lint_markdownlint ;;
+--lint-pydocstyle) lint_pydocstyle ;;
+--lint-shellcheck) lint_shellcheck ;;
+--lint-yamllint) lint_yamllint ;;
+--python-tests) python_tests ;;
+*) echo "[ERROR] Invalid argument '$arg'. Exiting." && help && exit 1 ;;
 esac
